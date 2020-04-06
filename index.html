@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Vizit</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@3.0/dist/svg.js"></script>
+</head>
+
+<body>
+
+    <script>
+        // 定义svg对象, 在body里面添加一个svg
+        let svg = SVG().addTo('body').attr({ width: 1000, height: 800 });
+        // marker: arrow head
+        let marker = svg.marker(13, 13, function (add) {
+            add.path('M2,2 L2,11 L10,6 L2,2').fill('blue').stroke({ width: 1, color: 'blue' })
+        }).attr({ "refX": "2", "refY": "6", "orient": "auto" });
+        // Set the global configs to synchronous
+        $.ajaxSetup({
+            async: false
+        });
+        let version = Date.now();
+
+        function createNode(container, data) {
+            // 用一个group把节点边框和文本放在一起，这样可以利用group的transform来定义
+            // 整个group里面所有节点的坐标位置
+            let translateX = data.group.transform.translateX;
+            let translateY = data.group.transform.translateY;
+            let width = data.group.id.length * 11;
+            let height = 28;
+            let group = container.group()
+                .transform({ translateX: translateX, translateY: translateY })
+                .id(data.group.id)
+                .data('leftTopX', translateX)
+                .data('leftTopY', translateY)
+                .data('width', width)
+                .data('height', height)
+                ;
+            // TODO style 的信息暂时hardcode, 后面会用程序控制动态变化的效果。
+            let style = { fill: 'none', stroke: 'blue' };
+            let attributes = { ...style, ...data.shape.attributes };
+            // 动态的调用函数，可以支持绘制各种图形，比如:rect, ellipse
+            let rect = container[data.shape.type](width, height).attr(attributes);
+            group.add(rect);
+
+            let label = container.text(data.label.text);
+            label.attr(data.label.attributes);
+            group.add(label);
+
+            return group; 
+        }
+
+        function buildPathId(path) {
+            let start = path.start;
+            let end = path.end;
+            return `${start}_${end}`;
+        }
+
+        function createPath(container, path, marker) {
+            let start = path.start;
+            let end = path.end;
+            let startNode = svg.findOne(`#${start}`);
+            let endNode = svg.findOne(`#${end}`);
+            let startX = startNode.data('leftTopX') + startNode.data('width') + path.startOffsetX;
+            let startY = startNode.data('leftTopY') + startNode.data('height') + path.startOffsetY;
+            let endX = endNode.data('leftTopX') + path.endOffsetX;
+            let endY = endNode.data('leftTopY') + path.endOffsetY;
+            let data = `M ${startX}, ${startY} L ${endX}, ${endY}`;
+            let id = buildPathId(path);
+            let result = container.path(data).id(id)
+                .fill('blue')
+                .stroke({ width: 1, color: 'blue' })
+                .marker('end', marker)
+                .data('points', [startX, startY, endX, endY]);
+            return result;
+        }
+
+        function animate(path) {
+            let id = buildPathId(path);
+            let points = svg.findOne(`#${id}`).data('points');
+            return svg.circle(20).attr({ cx: points[0], cy: points[1] }).fill('green')
+                .animate(2500, 100, 'now')
+                .move(points[2], points[3] - 10)
+                .loop(Number.MAX_SAFE_INTEGER, false, 200);
+        }
+
+        SVG.on(document, 'DOMContentLoaded', function () {
+            $.getJSON("data/brokers.json?" + version, function (data) {
+                data.forEach(node => createNode(svg, node))
+            });
+
+            $.getJSON("data/zookeeper.json?" + version, function (data) {
+                data.forEach(node => createNode(svg, node))
+            });
+
+            $.getJSON("data/paths.json?" + version, function (data) {
+                data.forEach(value => createPath(svg, value, marker));
+            });
+
+            $.getJSON("data/paths.json?" + version, function (data) {
+                data.forEach(value => animate(value));
+            });
+
+        })
+    </script>
+</body>
+
+</html>
